@@ -1,0 +1,106 @@
+from random import randint
+
+
+
+class Proposer(process):
+    def setup(acceptors:set):
+        output("Proposer started.")
+
+        self.n = None # self is needed for declaring variables
+        
+    def anyof(s):
+        return next(iter(s)) if s else None
+    
+    def run():
+        # Phase 1 
+        output("Sending prepare request to acceptors.")
+        n = (0, self) if n == None else (n[0] + 1, self)
+        output('proposer: ', n)
+        send(('prepare', n), to = acceptors)
+
+        # Phase 2
+        #
+        if await(len(setof(a, received(('prepared', n, v), from_ =a))) > len(acceptors)/2):
+
+            # v is a value that is used to remember a process.
+            # proposal number is used to categorize the processes.
+            v = anyof(setof(v, received(('prepared', n, (n2, v))), n2==max(setof(n2, received(('prepared', n, (n2, v)))))) or {randint(1,100)}) 
+            responded = setof(a, received(('prepared', n, v), from_ =a))
+
+            output(f'v = {v} + responded: {responded}')
+            send(('accept', n, v), to= responded)
+            output("Proposer: accept request sent out to those who responded")
+            
+
+# Issue: I need to place my run() in a while true do this to account for multiple proposers.
+class Acceptor(process):
+    def setup(proposers:set, learners:set):
+        output("Acceptor started.")
+
+    # anyof() is a function that ensures that a value is passed for when there is no set. 
+    def anyof(s):
+        return next(iter(s)) if s else None # iter() is a function that iterates through a list.
+
+    def run():
+        
+        # Phase 1 
+        # after receiving proposal number, we need to check if it is greater than any prepare request n it responded to.
+        # sends respond message to proposal.
+        # However, we check if some condition is true before responding.
+        await some(received(('prepare', n), from_ = proposers))
+        output('acceptor received process: ', n)
+        if each(sent(('prepared', responded_n, v)), has= n > responded_n): # sent() is history of messages sent by Acceptors. each() iterates and checks proposal numbers are not greater than the new process.
+            
+            # setof(x, source_set, condition) -- x can be a single value or a set : ()
+            max_prop = anyof(setof((n, v), sent(('accepted', n, v)), n == max(setof(n, sent(('accepted', n, v)))))) 
+            send(('prepared', n, max_prop), to= proposers)
+            output(f"acceptor recieved prepare request from proposer. + the n value is {n} + the max prop is {max_prop}")
+
+        # Phase 2
+        if await(some(received(('accept', n, v)))):
+            output('accept request received from proposer.')
+            send(('accepted', n, v), to= learners)
+             
+             # Let learners learn of new accepted value.
+
+
+    
+
+class Learner(process): # will be implemented after acceptor and proposer.
+    def setup(acceptors:set):
+        output('Learner started.')
+
+    def run():
+        
+        if await(some(received(('accepted', n, v)))):
+            output('learned', n, v)
+
+
+def main():
+
+
+    # add a fail rate on this line
+
+    proposers = new(Proposer, num= 2)
+    acceptors = new(Acceptor, num= 3)
+    learners = new(Learner, num= 1)
+
+    setup(proposers, (acceptors,))
+    setup(acceptors, (proposers, learners,))
+    setup(learners, (acceptors,))
+
+    start(proposers | acceptors | learners) # add learner when it is time
+
+
+    '''
+    Potential Next Steps:
+        3. implement learner class.
+        4. put a timeout/terminate function.
+        5. implement experiments/bugs
+        6. implement fail rate.
+    '''
+
+    '''
+    Good to Know:
+        1. Majority is setof(acceptors)/2 -? (typo)
+    '''
